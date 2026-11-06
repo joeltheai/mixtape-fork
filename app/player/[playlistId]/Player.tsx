@@ -4,9 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import PixelIcon from "../../components/PixelIcon";
-import type { PlaylistTrack } from "@/lib/spotify";
+import type { PlaylistTrack } from "@/lib/playlist";
 
 const SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
+const READY_TIMEOUT_MS = 15_000;
+
+// Shows up in the browser console (and in `next dev`'s log file).
+const log = (...args: unknown[]) => console.info("[mixtape player]", ...args);
 
 type NowPlaying = { position?: number; name: string; artists: string; cover?: string };
 
@@ -56,10 +60,12 @@ export default function Player({
       });
 
     let res = await play();
+    log("play request →", res.status);
     if (res.status === 404) {
       // A brand-new device can take a moment to register with Spotify.
       await new Promise((r) => setTimeout(r, 1000));
       res = await play();
+      log("play retry →", res.status);
     }
     if (res.ok) {
       startedRef.current = true;
@@ -67,6 +73,7 @@ export default function Player({
     } else if (res.status === 403) {
       setMessage("Spotify Premium is needed to play music here.");
     } else {
+      log("play failed:", await res.text());
       setMessage("Couldn't start playback. Press play to try again.");
     }
   }, [playlistId, startPosition]);
@@ -75,7 +82,14 @@ export default function Player({
     let player: Spotify.Player | null = null;
     let cancelled = false;
 
+    // If Spotify never reports the player as ready, say so instead of spinning forever.
+    const readyTimer = setTimeout(() => {
+      log("no 'ready' event after", READY_TIMEOUT_MS, "ms");
+      setMessage("Spotify's player didn't connect. Refresh to try again.");
+    }, READY_TIMEOUT_MS);
+
     const init = () => {
+      log("SDK loaded, creating player");
       if (cancelled || !window.Spotify) return;
       player = new window.Spotify.Player({
         name: "Mixtape",
@@ -85,10 +99,14 @@ export default function Player({
       playerRef.current = player;
 
       player.addListener("ready", ({ device_id }) => {
+        log("ready, device", device_id);
+        clearTimeout(readyTimer);
+        setMessage("Starting…");
         deviceRef.current = device_id;
         void startPlayback();
       });
       player.addListener("not_ready", () => {
+        log("not_ready");
         deviceRef.current = null;
       });
       player.addListener("player_state_changed", (state) => {
@@ -104,22 +122,28 @@ export default function Player({
         });
         setPaused(state.paused);
       });
-      player.addListener("account_error", () =>
-        setMessage("Spotify Premium is needed to play music here."),
+      player.addListener("account_error", (e) =>
+        fail("account_error", e, "Spotify Premium is needed to play music here."),
       );
-      player.addListener("authentication_error", () =>
-        setMessage("Spotify login expired. Log in again."),
+      player.addListener("authentication_error", (e) =>
+        fail("authentication_error", e, "Spotify login expired. Log in again."),
       );
-      player.addListener("initialization_error", () =>
-        setMessage("This browser can't play Spotify. Try Chrome, Firefox or Edge."),
+      player.addListener("initialization_error", (e) =>
+        fail("initialization_error", e, "This browser can't play Spotify. Try Chrome, Firefox or Edge."),
       );
-      player.addListener("playback_error", (e) => setMessage(e.message));
+      player.addListener("playback_error", (e) => fail("playback_error", e, e.message));
       player.addListener("autoplay_failed", () => {
         setPaused(true);
         setMessage("Press play to start.");
       });
 
-      void player.connect();
+      void player.connect().then((ok) => log("connect() →", ok));
+    };
+
+    const fail = (event: string, e: Spotify.Error, text: string) => {
+      log(event, e.message);
+      clearTimeout(readyTimer);
+      setMessage(text);
     };
 
     if (window.Spotify) {
@@ -136,6 +160,7 @@ export default function Player({
 
     return () => {
       cancelled = true;
+      clearTimeout(readyTimer);
       player?.disconnect();
       playerRef.current = null;
       deviceRef.current = null;

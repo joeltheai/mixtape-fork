@@ -1,12 +1,15 @@
 import { Suspense } from "react";
-import { withSpotify } from "@/lib/session";
-import { getPlaylistTracks } from "@/lib/spotify";
+import { loadPlaylistTracks } from "@/lib/session";
 import Player from "./Player";
 
 async function PlayerLoader({ params, searchParams }: PageProps<"/player/[playlistId]">) {
   const { playlistId } = await params;
   const { track } = await searchParams;
-  const tracks = await withSpotify((token) => getPlaylistTracks(playlistId, token));
+  const result = await loadPlaylistTracks(playlistId);
+  if (!result.ok) {
+    return <p className="m-auto text-3xl text-white">Couldn&apos;t open this playlist.</p>;
+  }
+  const { tracks } = result;
 
   // ?track= is the 1-based track number shown on the tracklist.
   const wanted = Number(typeof track === "string" ? track : 1) - 1;

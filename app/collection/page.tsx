@@ -6,17 +6,24 @@ import { withSpotify } from "@/lib/session";
 import { spotifyGet, type Paging, type SimplifiedPlaylist } from "@/lib/spotify";
 
 async function Playlists() {
-  const page = await withSpotify((token) =>
-    spotifyGet<Paging<SimplifiedPlaylist>>("/me/playlists?limit=50", token),
+  const [me, page] = await withSpotify((token) =>
+    Promise.all([
+      spotifyGet<{ id: string }>("/me", token),
+      spotifyGet<Paging<SimplifiedPlaylist>>("/me/playlists?limit=50", token),
+    ]),
   );
-  const playlists = page.items.filter(Boolean);
+  // Apps in Spotify's Development Mode can only read the tracks of playlists the
+  // user owns or collaborates on (others return 403), so only show those.
+  const playlists = page.items.filter(
+    (p) => p && (p.owner.id === me.id || p.collaborative),
+  );
 
   if (playlists.length === 0) {
     return <p className="text-2xl text-white">No playlists found on your Spotify account.</p>;
   }
 
   return (
-    <ul className="grid w-full max-w-6xl grid-cols-4 gap-x-6 gap-y-10 sm:gap-x-10 sm:px-6">
+    <ul className="grid w-full max-w-6xl grid-cols-4 gap-x-8 gap-y-14 sm:gap-x-14 sm:gap-y-20 sm:px-6">
       {playlists.map((p) => (
         <li key={p.id}>
           <Link
@@ -39,7 +46,7 @@ async function Playlists() {
 export default function CollectionPage() {
   return (
     <div className="flex min-h-screen flex-1 flex-col items-center gap-10 bg-grey-noise px-4 pb-16">
-      <header className="w-full px-4 pt-10 pb-6 sm:pt-14 sm:pb-10">
+      <header className="w-full px-4 pt-10 pb-10 sm:pt-14 sm:pb-16">
         <CutoutTitle text="My Mixtape Collection" />
       </header>
       <Suspense fallback={<p className="text-2xl text-white">Loading your mixtapes…</p>}>

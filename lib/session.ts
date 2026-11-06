@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ACCESS_COOKIE, SpotifyError } from "./spotify";
+import { getPlaylistTracks } from "./playlist";
 
 /** The current Spotify access token, or a redirect to /login. */
 export async function requireAccessToken() {
@@ -18,4 +19,15 @@ export async function withSpotify<T>(fn: (token: string) => Promise<T>): Promise
     if (e instanceof SpotifyError && e.status === 401) redirect("/login");
     throw e;
   }
+}
+
+/** A playlist's tracks; an expired token sends the user to /login. */
+export async function loadPlaylistTracks(playlistId: string) {
+  const token = await requireAccessToken();
+  const result = await getPlaylistTracks(playlistId, token);
+  if (!result.ok) {
+    if (result.status === 401) redirect("/login");
+    console.error(`Playlist ${playlistId}: Spotify ${result.status} ${result.message}`);
+  }
+  return result;
 }
