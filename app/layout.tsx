@@ -19,6 +19,30 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${jersey.variable} h-full antialiased`}
     >
+      <head>
+        <link
+          id="favicon"
+          rel="icon"
+          type="image/png"
+          sizes="128x128"
+          href="/favicon-light.png"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function () {
+  var icon = document.getElementById("favicon");
+  if (!icon || !window.matchMedia) return;
+  var query = window.matchMedia("(prefers-color-scheme: dark)");
+  function update() {
+    icon.href = query.matches ? "/favicon-dark.png" : "/favicon-light.png";
+  }
+  update();
+  if (query.addEventListener) query.addEventListener("change", update);
+  else query.addListener(update);
+})();`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

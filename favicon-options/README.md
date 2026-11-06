@@ -43,7 +43,8 @@ The favicon in use is **Album CD** from
 [Streamline Pixel](https://icon-sets.iconify.design/streamline-pixel/music-album-cd-disk-playlist/)
 by [Streamline](https://github.com/webalys-hq/streamline-vectors), licensed
 under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). It is
-rendered into `app/favicon.ico` at 16–256px.
+served as `public/favicon-light.png` and `public/favicon-dark.png` (128px),
+swapped with the system theme from `app/layout.tsx`.
 
 Other CC BY icons in this folder need a credit line if they are used.
 MIT / ISC / Apache icons do not require attribution. OpenMoji is CC BY-SA 4.0.
