@@ -6,32 +6,36 @@ async function PlayerLoader({ params, searchParams }: PageProps<"/player/[playli
   const { playlistId } = await params;
   const { track } = await searchParams;
   const result = await loadPlaylistTracks(playlistId);
-  if (!result.ok) {
+
+  // 403 = a playlist the user follows but doesn't own: Spotify won't list its
+  // tracks to this app, but it can still be played. The player then shows
+  // whatever Spotify reports as the current song.
+  if (!result.ok && result.status !== 403) {
     return <p className="m-auto text-3xl text-white">Couldn&apos;t open this playlist.</p>;
   }
-  const { tracks } = result;
+  const tracks = result.ok ? result.tracks : null;
 
   // ?track= is the 1-based track number shown on the tracklist.
   const wanted = Number(typeof track === "string" ? track : 1) - 1;
-  const start = tracks.find((t) => t.position === wanted) ?? tracks[0];
+  const start = tracks ? (tracks.find((t) => t.position === wanted) ?? tracks[0]) : null;
 
-  if (!start) {
+  if (tracks && !start) {
     return <p className="m-auto text-3xl text-white">This mixtape is empty.</p>;
   }
 
   return (
     <Player
-      key={`${playlistId}-${start.position}`}
+      key={`${playlistId}-${start?.position ?? 0}`}
       playlistId={playlistId}
       tracks={tracks}
-      startPosition={start.position}
+      startPosition={start?.position ?? 0}
     />
   );
 }
 
 export default function PlayerPage(props: PageProps<"/player/[playlistId]">) {
   return (
-    <div className="flex min-h-screen flex-1 flex-col bg-grey-noise">
+    <div className="relative flex min-h-screen flex-1 flex-col bg-grey-noise">
       <Suspense>
         <PlayerLoader {...props} />
       </Suspense>

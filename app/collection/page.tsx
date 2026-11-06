@@ -12,11 +12,11 @@ async function Playlists() {
       spotifyGet<Paging<SimplifiedPlaylist>>("/me/playlists?limit=50", token),
     ]),
   );
-  // Apps in Spotify's Development Mode can only read the tracks of playlists the
-  // user owns or collaborates on (others return 403), so only show those.
-  const playlists = page.items.filter(
-    (p) => p && (p.owner.id === me.id || p.collaborative),
-  );
+  const playlists = page.items.filter(Boolean);
+  // Spotify's Development Mode only lets apps read the track list of playlists the
+  // user owns or collaborates on. Others (followed playlists) can still be *played*,
+  // so they skip the tracklist and go straight to the player.
+  const canListTracks = (p: SimplifiedPlaylist) => p.owner.id === me.id || p.collaborative;
 
   if (playlists.length === 0) {
     return <p className="text-2xl text-white">No playlists found on your Spotify account.</p>;
@@ -27,7 +27,7 @@ async function Playlists() {
       {playlists.map((p) => (
         <li key={p.id}>
           <Link
-            href={`/tracklist/${p.id}`}
+            href={canListTracks(p) ? `/tracklist/${p.id}` : `/player/${p.id}`}
             className="group flex flex-col items-center gap-2"
           >
             <div className="w-full transition-transform duration-200 group-hover:-translate-y-1 group-hover:rotate-1">

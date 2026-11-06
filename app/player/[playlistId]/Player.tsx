@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import PixelIcon from "../../components/PixelIcon";
+import MeshBackground, { useCoverPalette } from "./MeshBackground";
 import type { PlaylistTrack } from "@/lib/playlist";
 
 const SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
@@ -32,11 +33,12 @@ export default function Player({
   startPosition,
 }: {
   playlistId: string;
-  tracks: PlaylistTrack[];
+  /** null = a followed playlist whose track list Spotify won't share with this app. */
+  tracks: PlaylistTrack[] | null;
   startPosition: number;
 }) {
-  const start = tracks.find((t) => t.position === startPosition)!;
-  const [now, setNow] = useState<NowPlaying>(start);
+  const start = tracks?.find((t) => t.position === startPosition);
+  const [now, setNow] = useState<NowPlaying>(start ?? { name: "", artists: "" });
   const [paused, setPaused] = useState(true);
   const [message, setMessage] = useState<string | null>("Loading player…");
 
@@ -113,7 +115,7 @@ export default function Player({
         if (!state) return;
         const t = state.track_window.current_track;
         const uri = t.linked_from?.uri ?? t.uri;
-        const match = tracks.find((x) => x.uri === uri || x.uri === t.uri);
+        const match = tracks?.find((x) => x.uri === uri || x.uri === t.uri);
         setNow({
           position: match?.position,
           name: t.name,
@@ -175,20 +177,28 @@ export default function Player({
     else await player.togglePlay();
   };
 
-  const trackNumber = (now.position ?? startPosition) + 1;
+  // Followed playlists have no track list, so there's no number to show.
+  const trackNumber = tracks ? (now.position ?? startPosition) + 1 : null;
+  const palette = useCoverPalette(now.cover);
 
   return (
-    <div className="flex flex-1 flex-col items-center px-6 pb-12 pt-6 text-[#8e1b52] sm:px-10">
+    <div
+      className="relative isolate flex flex-1 flex-col items-center px-6 pb-12 pt-6 transition-colors duration-1000 sm:px-10"
+      style={{ color: palette.text }}
+    >
+      <MeshBackground colors={palette.colors} />
       <header className="flex w-full items-center justify-between">
         <nav className="flex items-center gap-6">
-          <Link href={`/tracklist/${playlistId}`} aria-label="Track list">
-            <PixelIcon name="menu" size={26} />
-          </Link>
+          {tracks && (
+            <Link href={`/tracklist/${playlistId}`} aria-label="Track list">
+              <PixelIcon name="menu" size={26} />
+            </Link>
+          )}
           <Link href="/collection" aria-label="Collection">
             <PixelIcon name="home" size={32} />
           </Link>
         </nav>
-        <p className="text-3xl">Track {trackNumber}</p>
+        {trackNumber && <p className="text-3xl">Track {trackNumber}</p>}
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center gap-6">
