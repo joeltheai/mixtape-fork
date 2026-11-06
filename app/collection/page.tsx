@@ -5,18 +5,30 @@ import CdCase from "../components/CdCase";
 import { withSpotify } from "@/lib/session";
 import { spotifyGet, type Paging, type SimplifiedPlaylist } from "@/lib/spotify";
 
+/** Every playlist in the user's library (owned and followed), 50 per page. */
+async function getAllPlaylists(token: string) {
+  const all: SimplifiedPlaylist[] = [];
+  for (let offset = 0; ; offset += 50) {
+    const page = await spotifyGet<Paging<SimplifiedPlaylist>>(
+      `/me/playlists?limit=50&offset=${offset}`,
+      token,
+    );
+    all.push(...page.items.filter(Boolean));
+    if (!page.next) return all;
+  }
+}
+
 async function Playlists() {
-  const [me, page] = await withSpotify((token) =>
-    Promise.all([
-      spotifyGet<{ id: string }>("/me", token),
-      spotifyGet<Paging<SimplifiedPlaylist>>("/me/playlists?limit=50", token),
-    ]),
+  const [me, playlists] = await withSpotify((token) =>
+    Promise.all([spotifyGet<{ id: string }>("/me", token), getAllPlaylists(token)]),
   );
-  const playlists = page.items.filter(Boolean);
   // Spotify's Development Mode only lets apps read the track list of playlists the
   // user owns or collaborates on. Others (followed playlists) can still be *played*,
   // so they skip the tracklist and go straight to the player.
   const canListTracks = (p: SimplifiedPlaylist) => p.owner.id === me.id || p.collaborative;
+  console.info(
+    `[collection] ${playlists.length} playlists, ${playlists.filter((p) => !canListTracks(p)).length} made by others`,
+  );
 
   if (playlists.length === 0) {
     return <p className="text-2xl text-white">No playlists found on your Spotify account.</p>;

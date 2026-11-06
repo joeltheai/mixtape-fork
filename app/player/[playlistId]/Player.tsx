@@ -204,6 +204,33 @@ export default function Player({
   const trackNumber = tracks ? (now.position ?? startPosition) + 1 : null;
   const palette = useCoverPalette(now.cover);
 
+  const controls = {
+    paused,
+    onPrevious: () => void playerRef.current?.previousTrack(),
+    onPlayPause: () => void onPlayPause(),
+    onNext: () => void playerRef.current?.nextTrack(),
+  };
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch (e) {
+      log("fullscreen not allowed:", e);
+    }
+  };
+
+  // From the mini player: close it, bring this tab forward and go full screen.
+  const backToFullscreen = async () => {
+    pip.pipWindow?.close();
+    window.focus();
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch (e) {
+      log("fullscreen not allowed:", e); // e.g. the tab isn't in front
+    }
+  };
+
   return (
     <div
       className="relative isolate flex flex-1 flex-col items-center px-6 pb-12 pt-6 transition-colors duration-1000 sm:px-10"
@@ -227,6 +254,9 @@ export default function Player({
               <PixelIcon name="pip" size={24} />
             </button>
           )}
+          <button onClick={() => void toggleFullscreen()} aria-label="Toggle full screen">
+            <PixelIcon name="fullscreen" size={24} />
+          </button>
           {trackNumber && <p className="text-3xl">Track {trackNumber}</p>}
         </div>
       </header>
@@ -239,31 +269,9 @@ export default function Player({
           <p className="text-2xl sm:text-3xl">{now.artists}</p>
         </div>
 
-        <ProgressBar position={time.position} duration={time.duration} onSeek={onSeek} />
+        <Controls {...controls} className="gap-16 sm:gap-24" size={40} />
 
-        <div className="flex items-center gap-16 sm:gap-24">
-          <button
-            aria-label="Previous track"
-            onClick={() => void playerRef.current?.previousTrack()}
-            className="transition-transform active:scale-90"
-          >
-            <PixelIcon name="previous" size={40} />
-          </button>
-          <button
-            aria-label={paused ? "Play" : "Pause"}
-            onClick={() => void onPlayPause()}
-            className="transition-transform active:scale-90"
-          >
-            <PixelIcon name={paused ? "play" : "pause"} size={52} />
-          </button>
-          <button
-            aria-label="Next track"
-            onClick={() => void playerRef.current?.nextTrack()}
-            className="transition-transform active:scale-90"
-          >
-            <PixelIcon name="next" size={40} />
-          </button>
-        </div>
+        <ProgressBar position={time.position} duration={time.duration} onSeek={onSeek} />
 
         {message && <p className="text-xl">{message}</p>}
       </main>
@@ -278,16 +286,49 @@ export default function Player({
             <MeshBackground colors={palette.colors} />
             <Disc cover={now.cover} spinning={!paused} className="w-[min(78vw,62vh)]" />
             <p className="max-w-full truncate text-2xl">{now.name}</p>
+            <Controls {...controls} className="gap-10" size={24} />
             <button
-              aria-label={paused ? "Play" : "Pause"}
-              onClick={() => void onPlayPause()}
-              className="transition-transform active:scale-90"
+              onClick={() => void backToFullscreen()}
+              aria-label="Back to full screen player"
+              className="absolute right-3 top-3 transition-transform active:scale-90"
             >
-              <PixelIcon name={paused ? "play" : "pause"} size={30} />
+              <PixelIcon name="fullscreen" size={20} />
             </button>
           </div>,
           pip.pipWindow.document.body,
         )}
+    </div>
+  );
+}
+
+function Controls({
+  paused,
+  onPrevious,
+  onPlayPause,
+  onNext,
+  size,
+  className,
+}: {
+  paused: boolean;
+  onPrevious: () => void;
+  onPlayPause: () => void;
+  onNext: () => void;
+  /** Height of the previous/next icons; play/pause is 30% bigger. */
+  size: number;
+  className?: string;
+}) {
+  const btn = "transition-transform active:scale-90";
+  return (
+    <div className={`flex items-center ${className ?? ""}`}>
+      <button aria-label="Previous track" onClick={onPrevious} className={btn}>
+        <PixelIcon name="previous" size={size} />
+      </button>
+      <button aria-label={paused ? "Play" : "Pause"} onClick={onPlayPause} className={btn}>
+        <PixelIcon name={paused ? "play" : "pause"} size={Math.round(size * 1.3)} />
+      </button>
+      <button aria-label="Next track" onClick={onNext} className={btn}>
+        <PixelIcon name="next" size={size} />
+      </button>
     </div>
   );
 }

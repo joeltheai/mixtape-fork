@@ -32,26 +32,3 @@ body {
   background-blend-mode: overlay;
 }
 
-/* Player background: four blurred blobs (one per cover colour) drifting around. */
-.mesh-blob {
-  position: absolute;
-  width: 75vmax;
-  height: 75vmax;
-  border-radius: 9999px;
-  filter: blur(90px);
-  transition: background-color 1.2s ease;
-  will-change: transform;
-}
-.mesh-blob-0 { top: -30vmax; left: -30vmax; animation: mesh-drift-a 19s ease-in-out infinite alternate; }
-.mesh-blob-1 { top: -30vmax; right: -30vmax; animation: mesh-drift-b 23s ease-in-out infinite alternate; }
-.mesh-blob-2 { bottom: -30vmax; left: -30vmax; animation: mesh-drift-c 21s ease-in-out infinite alternate; }
-.mesh-blob-3 { bottom: -30vmax; right: -30vmax; animation: mesh-drift-d 25s ease-in-out infinite alternate; }
-
-@keyframes mesh-drift-a { to { transform: translate(28vw, 22vh) scale(1.15); } }
-@keyframes mesh-drift-b { to { transform: translate(-24vw, 30vh) scale(0.9); } }
-@keyframes mesh-drift-c { to { transform: translate(30vw, -26vh) scale(1.1); } }
-@keyframes mesh-drift-d { to { transform: translate(-30vw, -20vh) scale(1.2); } }
-
-@media (prefers-reduced-motion: reduce) {
-  .mesh-blob { animation: none; }
-}
