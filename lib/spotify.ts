@@ -114,3 +114,64 @@ export function sameOriginUrl(path: string, request: Request) {
   const proto = request.headers.get("x-forwarded-proto") ?? new URL(request.url).protocol.replace(":", "");
   return new URL(path, host ? `${proto}://${host}` : request.url);
 }
+
+type ApiTrack = {
+  type?: string;
+  uri: string;
+  name: string;
+  artists?: { name: string }[];
+  album?: { images?: SpotifyImage[] };
+  images?: SpotifyImage[]; // podcast episodes
+};
+type ApiPlaylistItem = { track?: ApiTrack | null; item?: ApiTrack | null };
+
+export type PlaylistTrack = {
+  /** 0-based position in the playlist — what Spotify's play `offset` expects. */
+  position: number;
+  uri: string;
+  name: string;
+  artists: string;
+  cover?: string;
+};
+
+async function getAbsolute<T>(url: string, accessToken: string): Promise<T> {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new SpotifyError(res.status, await res.text());
+  return res.json();
+}
+
+/** Every track in a playlist, following Spotify's 100-per-page pagination. */
+export async function getPlaylistTracks(
+  playlistId: string,
+  accessToken: string,
+): Promise<PlaylistTrack[]> {
+  const base = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}`;
+  let page: Paging<ApiPlaylistItem>;
+  try {
+    page = await getAbsolute(`${base}/items?limit=100`, accessToken);
+  } catch (e) {
+    // Older name for the same endpoint.
+    if (!(e instanceof SpotifyError && e.status === 404)) throw e;
+    page = await getAbsolute(`${base}/tracks?limit=100`, accessToken);
+  }
+
+  const items = [...page.items];
+  while (page.next) {
+    page = await getAbsolute(page.next, accessToken);
+    items.push(...page.items);
+  }
+
+  const tracks: PlaylistTrack[] = [];
+  items.forEach((it, position) => {
+    const t = it?.track ?? it?.item;
+    if (!t?.name) return; // removed/unavailable items: keep positions aligned, skip display
+    tracks.push({
+      position,
+      uri: t.uri,
+      name: t.name,
+      artists: (t.artists ?? []).map((a) => a.name).join(", "),
+      cover: (t.album?.images ?? t.images)?.[0]?.url,
+    });
+  });
+  return tracks;
+}
