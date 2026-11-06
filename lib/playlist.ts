@@ -29,31 +29,19 @@ export type TracksResult =
   | { ok: true; tracks: PlaylistTrack[] }
   | { ok: false; status: number; message: string };
 
-/** Every track in a playlist, or the Spotify error status. */
+/**
+ * Every track in a playlist (following Spotify's pagination), or the Spotify
+ * error status. Cached per token + playlist so opening the player right after
+ * the tracklist doesn't download the whole playlist again.
+ *
+ * Errors are *returned*, never thrown: production builds strip error messages
+ * crossing a "use cache" boundary, so a thrown 403 would turn into a crash.
+ */
 export async function getPlaylistTracks(
   playlistId: string,
   accessToken: string,
 ): Promise<TracksResult> {
-  try {
-    return { ok: true, tracks: await fetchPlaylistTracks(playlistId, accessToken) };
-  } catch (e) {
-    const m = /^spotify:(\d+):([\s\S]*)$/.exec(e instanceof Error ? e.message : "");
-    if (!m) throw e;
-    return { ok: false, status: Number(m[1]), message: m[2] };
-  }
-}
-
-/**
- * Follows Spotify's pagination. Cached for a few minutes per token + playlist,
- * so opening the player right after the tracklist doesn't download the whole
- * playlist again. Failures throw, so they're never cached.
- */
-async function fetchPlaylistTracks(
-  playlistId: string,
-  accessToken: string,
-): Promise<PlaylistTrack[]> {
   "use cache";
-  cacheLife("minutes");
 
   let url: string | null =
     `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/items` +
@@ -62,12 +50,18 @@ async function fetchPlaylistTracks(
   const items: ApiPlaylistItem[] = [];
   while (url) {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!res.ok) throw new Error(`spotify:${res.status}:${await res.text()}`);
+    if (!res.ok) {
+      // 403/404 won't change soon (ownership); anything else may be a blip.
+      if (res.status === 403 || res.status === 404) cacheLife("minutes");
+      else cacheLife("seconds");
+      return { ok: false, status: res.status, message: await res.text() };
+    }
     const page: { items: ApiPlaylistItem[]; next: string | null } = await res.json();
     items.push(...page.items);
     url = page.next;
   }
 
+  cacheLife("minutes");
   const tracks: PlaylistTrack[] = [];
   items.forEach((it, position) => {
     const t = it?.item ?? it?.track;
@@ -80,5 +74,5 @@ async function fetchPlaylistTracks(
       cover: (t.album?.images ?? t.images)?.[0]?.url,
     });
   });
-  return tracks;
+  return { ok: true, tracks };
 }

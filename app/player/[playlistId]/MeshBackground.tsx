@@ -48,11 +48,14 @@ function hslToRgb([h, s, l]: [number, number, number]): RGB {
   return [hue(h + 1 / 3) * 255, hue(h) * 255, hue(h - 1 / 3) * 255];
 }
 
-/** Push a colour to vivid: high saturation, bright-but-not-white lightness. */
-function vivid(c: RGB): RGB {
-  const [h, s, l] = rgbToHsl(c);
-  if (s < 0.08) return hslToRgb([h, 0, Math.min(Math.max(l, 0.45), 0.8)]); // greys stay grey
-  return hslToRgb([h, Math.max(s, 0.9), Math.min(Math.max(l, 0.5), 0.65)]);
+// Lightness given to the 4 colours, darkest → lightest, so neighbouring
+// regions of the background always contrast clearly.
+const LIGHTNESS = [0.28, 0.44, 0.6, 0.76];
+
+/** Fully saturated version of a colour at a set lightness (greys stay grey). */
+function vivid(c: RGB, lightness: number): RGB {
+  const [h, s] = rgbToHsl(c);
+  return hslToRgb([h, s < 0.08 ? 0 : Math.max(s, 0.92), lightness]);
 }
 
 const lum = ([r, g, b]: RGB) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
@@ -105,7 +108,9 @@ async function samplePalette(url: string): Promise<Palette> {
     );
   }
 
-  const colors = cents.map(vivid).sort((a, b) => lum(a) - lum(b)) as Palette["colors"];
+  const colors = cents
+    .sort((a, b) => lum(a) - lum(b))
+    .map((c, i) => vivid(c, LIGHTNESS[i])) as Palette["colors"];
   const avg = colors.reduce((s, c) => s + lum(c), 0) / 4;
   return { colors, text: avg > 0.55 ? "#161616" : "#ffffff" };
 }
@@ -137,9 +142,10 @@ attribute vec2 p;
 void main() { gl_Position = vec4(p, 0.0, 1.0); }
 `;
 
-// Domain-warped fractal noise (a "liquid" field) mapped through the 4 cover
-// colours as a heatmap ramp. The field flows over time, so colours swirl,
-// stretch and melt into each other continuously.
+// Big soft round blobs of the 4 cover colours drifting on slow orbits, blended
+// so each area takes the colour of its nearest blob (heatmap-like zones with
+// smooth round edges), plus a gentle low-frequency warp so the edges ripple
+// like liquid instead of staying perfectly circular.
 const FRAG = `
 precision highp float;
 uniform vec2 uRes;
@@ -149,33 +155,36 @@ uniform vec3 uC0, uC1, uC2, uC3;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
   vec2 i = floor(p), f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0); // quintic: extra smooth
   return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x),
              mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
 }
-float fbm(vec2 p) {
-  float v = 0.0, a = 0.5;
-  mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
-  for (int i = 0; i < 5; i++) { v += a * noise(p); p = m * p; a *= 0.5; }
-  return v;
-}
-vec3 ramp(float t) {
-  t = clamp(t, 0.0, 1.0) * 3.0;
-  vec3 c = mix(uC0, uC1, smoothstep(0.0, 1.0, t));
-  c = mix(c, uC2, smoothstep(1.0, 2.0, t));
-  return mix(c, uC3, smoothstep(2.0, 3.0, t));
-}
+
+#define BLOB(x, y, r, c) { vec2 d = uv - vec2(x, y); float w = exp(-dot(d, d) / (r * r)); acc += c * w; sum += w; }
+
 void main() {
-  vec2 uv = gl_FragCoord.xy / uRes.y * 1.4;
-  float t = uTime * 0.11;
-  vec2 q = vec2(fbm(uv + vec2(0.0, t)), fbm(uv + vec2(5.2, 1.3) - t));
-  vec2 r = vec2(fbm(uv + 3.5 * q + vec2(1.7, 9.2) + 0.7 * t),
-                fbm(uv + 3.5 * q + vec2(8.3, 2.8) - 0.6 * t));
-  float f = fbm(uv + 3.5 * r);
-  float v = f * 1.7 - 0.35 + 0.22 * sin(t * 1.7 + length(r) * 5.0);
-  vec3 col = mix(ramp(v), ramp(length(q) * 1.1), 0.22);
-  col *= 0.92 + 0.3 * f;
-  gl_FragColor = vec4(col, 1.0);
+  // Centred, aspect-correct coordinates (height spans -0.5..0.5).
+  vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
+  float t = uTime * 0.16;
+
+  // Slow liquid ripple.
+  uv += 0.09 * (vec2(noise(uv * 1.6 + t * 0.7), noise(uv * 1.6 - t * 0.6 + 7.3)) - 0.5);
+
+  vec3 acc = vec3(0.0);
+  float sum = 0.0;
+  BLOB(0.62 * sin(t * 0.71),       0.34 * cos(t * 0.93),       0.30, uC0)
+  BLOB(0.70 * cos(t * 0.53 + 1.0), 0.30 * sin(t * 0.81 + 2.0), 0.27, uC1)
+  BLOB(0.52 * sin(t * 0.62 + 3.0), 0.40 * sin(t * 0.44 + 1.0), 0.28, uC2)
+  BLOB(0.66 * cos(t * 0.84 + 4.0), 0.36 * cos(t * 0.57 + 3.0), 0.25, uC3)
+  BLOB(0.80 * sin(t * 0.33 + 5.0), 0.26 * cos(t * 0.72 + 5.0), 0.24, uC1)
+  BLOB(0.42 * cos(t * 0.47 + 2.0), 0.38 * sin(t * 0.59 + 4.0), 0.22, uC3)
+  BLOB(0.75 * sin(t * 0.39 + 6.0), 0.42 * cos(t * 0.36 + 6.0), 0.26, uC2)
+  BLOB(0.35 * cos(t * 0.66 + 0.5), 0.30 * sin(t * 0.48 + 0.5), 0.24, uC0)
+
+  // A dim base so far-from-everything corners fall back to the darkest colour.
+  acc += uC0 * 1e-3;
+  sum += 1e-3;
+  gl_FragColor = vec4(acc / sum, 1.0);
 }
 `;
 

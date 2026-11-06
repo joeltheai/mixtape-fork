@@ -269,9 +269,9 @@ export default function Player({
           <p className="text-2xl sm:text-3xl">{now.artists}</p>
         </div>
 
-        <Controls {...controls} className="gap-16 sm:gap-24" size={40} />
-
         <ProgressBar position={time.position} duration={time.duration} onSeek={onSeek} />
+
+        <Controls {...controls} className="gap-16 sm:gap-24" size={40} />
 
         {message && <p className="text-xl">{message}</p>}
       </main>
