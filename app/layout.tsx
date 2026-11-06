@@ -11,6 +11,10 @@ const jersey = Jersey_10({
 export const metadata: Metadata = {
   title: "My Mixtape Collection",
   description: "My mixtape collection",
+  // Favicon: Album CD by Streamline, rendered as light/dark PNGs.
+  // https://icon-sets.iconify.design/streamline-pixel/music-album-cd-disk-playlist/
+  // https://github.com/webalys-hq/streamline-vectors
+  // Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
   icons: {
     icon: [
       {
