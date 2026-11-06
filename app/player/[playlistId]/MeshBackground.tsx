@@ -64,7 +64,8 @@ export function useCoverPalette(cover?: string): Palette {
     let stale = false;
     samplePalette(cover)
       .then((p) => !stale && setPalette(p))
-      .catch(() => {}); // keep the previous colours if the image can't be read
+      // Keep the previous colours if the image can't be read.
+      .catch((e) => console.info("[mixtape player] couldn't sample cover colours:", e));
     return () => {
       stale = true;
     };

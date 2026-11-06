@@ -36,6 +36,7 @@ declare namespace Spotify {
     pause(): Promise<void>;
     nextTrack(): Promise<void>;
     previousTrack(): Promise<void>;
+    seek(positionMs: number): Promise<void>;
     getCurrentState(): Promise<PlaybackState | null>;
     addListener(event: "ready" | "not_ready", cb: (e: { device_id: string }) => void): boolean;
     addListener(event: "player_state_changed", cb: (state: PlaybackState | null) => void): boolean;
@@ -54,4 +55,13 @@ declare namespace Spotify {
 interface Window {
   Spotify?: typeof Spotify;
   onSpotifyWebPlaybackSDKReady?: () => void;
+}
+
+// Document Picture-in-Picture (Chrome/Edge 116+).
+interface DocumentPictureInPicture extends EventTarget {
+  requestWindow(options?: { width?: number; height?: number }): Promise<Window>;
+  readonly window: Window | null;
+}
+interface Window {
+  documentPictureInPicture?: DocumentPictureInPicture;
 }

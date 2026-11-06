@@ -1,26 +1,26 @@
 // Pixel-art icons drawn from text grids: "#" = filled pixel, "." = empty.
 // Rendered as crisp SVG rects, coloured with currentColor.
 
-// Right-pointing stepped triangle, 11 rows tall.
+// Right-pointing stepped triangle with a sharp tip, 11 rows tall.
 const TRIANGLE = [
-  "##......",
-  "####....",
-  "######..",
-  "########",
-  "########",
-  "########",
-  "########",
-  "########",
-  "######..",
-  "####....",
-  "##......",
+  "#.....",
+  "##....",
+  "###...",
+  "####..",
+  "#####.",
+  "######",
+  "#####.",
+  "####..",
+  "###...",
+  "##....",
+  "#.....",
 ];
 const mirror = (rows: string[]) => rows.map((r) => [...r].reverse().join(""));
 const BAR = "##";
 
 export const ICONS = {
-  play: TRIANGLE.map((r) => r + ".."),
-  pause: TRIANGLE.map(() => "###..###"),
+  play: TRIANGLE,
+  pause: TRIANGLE.map(() => "###.###"),
   next: TRIANGLE.map((r) => r + "." + BAR),
   previous: mirror(TRIANGLE).map((r) => BAR + "." + r),
   home: [
@@ -35,6 +35,17 @@ export const ICONS = {
     ".#..#.#..#.",
     ".#..#.#..#.",
     ".####.####.",
+  ],
+  pip: [
+    "############",
+    "#..........#",
+    "#..........#",
+    "#..........#",
+    "#.....######",
+    "#.....######",
+    "#.....######",
+    "#.....######",
+    "############",
   ],
   menu: [
     "###########",

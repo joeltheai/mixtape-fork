@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import PixelIcon from "../../components/PixelIcon";
+import Disc from "./Disc";
 import MeshBackground, { useCoverPalette } from "./MeshBackground";
+import ProgressBar from "./ProgressBar";
+import { usePictureInPicture } from "./usePictureInPicture";
 import type { PlaylistTrack } from "@/lib/playlist";
 
 const SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
@@ -40,6 +43,7 @@ export default function Player({
   const start = tracks?.find((t) => t.position === startPosition);
   const [now, setNow] = useState<NowPlaying>(start ?? { name: "", artists: "" });
   const [paused, setPaused] = useState(true);
+  const [time, setTime] = useState({ position: 0, duration: 0 });
   const [message, setMessage] = useState<string | null>("Loading player…");
 
   const playerRef = useRef<Spotify.Player | null>(null);
@@ -123,6 +127,7 @@ export default function Player({
           cover: t.album.images[0]?.url,
         });
         setPaused(state.paused);
+        setTime({ position: state.position, duration: state.duration });
       });
       player.addListener("account_error", (e) =>
         fail("account_error", e, "Spotify Premium is needed to play music here."),
@@ -169,6 +174,24 @@ export default function Player({
     };
   }, [tracks, startPlayback]);
 
+  // Spotify only reports the position on changes, so advance it locally while playing.
+  useEffect(() => {
+    if (paused) return;
+    const id = setInterval(
+      () =>
+        setTime((t) => ({ ...t, position: Math.min(t.position + 250, t.duration) })),
+      250,
+    );
+    return () => clearInterval(id);
+  }, [paused]);
+
+  const onSeek = (ms: number) => {
+    setTime((t) => ({ ...t, position: ms })); // move the bar now, don't wait for Spotify
+    void playerRef.current?.seek(ms);
+  };
+
+  const pip = usePictureInPicture();
+
   const onPlayPause = async () => {
     const player = playerRef.current;
     if (!player) return;
@@ -198,7 +221,14 @@ export default function Player({
             <PixelIcon name="home" size={32} />
           </Link>
         </nav>
-        {trackNumber && <p className="text-3xl">Track {trackNumber}</p>}
+        <div className="flex items-center gap-6">
+          {pip.supported && (
+            <button onClick={() => void pip.open()} aria-label="Pop out mini player">
+              <PixelIcon name="pip" size={24} />
+            </button>
+          )}
+          {trackNumber && <p className="text-3xl">Track {trackNumber}</p>}
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center gap-6">
@@ -208,6 +238,8 @@ export default function Player({
           <h1 className="text-4xl leading-tight sm:text-5xl">{now.name}</h1>
           <p className="text-2xl sm:text-3xl">{now.artists}</p>
         </div>
+
+        <ProgressBar position={time.position} duration={time.duration} onSeek={onSeek} />
 
         <div className="flex items-center gap-16 sm:gap-24">
           <button
@@ -235,43 +267,27 @@ export default function Player({
 
         {message && <p className="text-xl">{message}</p>}
       </main>
-    </div>
-  );
-}
 
-// cd.png's disc, 400px across: the hub (black ring and inward) is the inner 28.5%
-// of the radius, the hole the inner 11.5%. The song cover fills the disc between
-// the hole and the rim, with the hub and rim edge drawn back over it.
-const HOLE = "11.5%";
-const HUB = "28.5%";
-function Disc({ cover, spinning }: { cover?: string; spinning: boolean }) {
-  const coverMask = `radial-gradient(circle closest-side, transparent ${HOLE}, #000 calc(${HOLE} + 0.5%))`;
-  const discMask = `radial-gradient(circle closest-side, #000 ${HUB}, transparent calc(${HUB} + 0.5%), transparent 98%, #000 98.5%)`;
-
-  return (
-    <div
-      className="relative aspect-square w-[min(72vw,26rem)] animate-[spin_5s_linear_infinite] drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]"
-      style={{ animationPlayState: spinning ? "running" : "paused" }}
-    >
-      {cover && (
-        // eslint-disable-next-line @next/next/no-img-element -- Spotify CDN hosts vary
-        <img
-          src={cover}
-          alt=""
-          className="absolute inset-0 size-full rounded-full object-cover"
-          style={{ maskImage: coverMask, WebkitMaskImage: coverMask }}
-        />
-      )}
-      <Image
-        src="/assets/disc.png"
-        alt=""
-        fill
-        sizes="26rem"
-        priority
-        style={
-          cover ? { maskImage: discMask, WebkitMaskImage: discMask } : undefined
-        }
-      />
+      {/* Floating mini player: same background and spinning disc. */}
+      {pip.pipWindow &&
+        createPortal(
+          <div
+            className="relative isolate flex h-screen w-screen flex-col items-center justify-center gap-3 overflow-hidden p-4 transition-colors duration-1000"
+            style={{ color: palette.text }}
+          >
+            <MeshBackground colors={palette.colors} />
+            <Disc cover={now.cover} spinning={!paused} className="w-[min(78vw,62vh)]" />
+            <p className="max-w-full truncate text-2xl">{now.name}</p>
+            <button
+              aria-label={paused ? "Play" : "Pause"}
+              onClick={() => void onPlayPause()}
+              className="transition-transform active:scale-90"
+            >
+              <PixelIcon name={paused ? "play" : "pause"} size={30} />
+            </button>
+          </div>,
+          pip.pipWindow.document.body,
+        )}
     </div>
   );
 }
